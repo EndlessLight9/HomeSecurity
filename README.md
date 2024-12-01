@@ -112,6 +112,17 @@ Alarme Sonoro: um buzzer poderá ser ativado em caso de possíveis invasões qua
 Display LCD: um Display poderá ser utilizado para exibir a temperatura medida pelo sensor de temperatura e umidade. Isso permitirá que os ocupantes monitorem a temperatura em tempo real, o que pode ser útil para garantir o conforto e a segurança, especialmente em situações como controle de temperatura ambiente ou detecção de superaquecimento em determinadas áreas.
 
 
+#### Conexões Usadas
+
+Sensor de Temperatura e Umidade: Pin 1 e 0 correspondente ao I2C.
+
+Servomotor : GPIO 17.
+
+Sensor de Presença: GPIO 9 para Trigger, GPIO 16 para Echo.
+
+Sensor de Gas: GPIO 28, entrada analógica disponivel.
+
+O resto das conexões 5V e terra foram usadas diretamente da bitdoglab conectada com a placa personalizada.
 
 
 
