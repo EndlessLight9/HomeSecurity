@@ -1,0 +1,69 @@
+#--------------SERVIDOR—-----------#
+from flask import Flask, jsonify, request
+
+app = Flask(__name__)
+
+# Dados iniciais para o sistema
+sistema_seguranca = {
+    "ativado": False,
+    "estado_porta": "Fechada",  # Pode ser "Aberta" ou "Fechada"
+    "umidade": 0.0,  # Valor em porcentagem
+    "temperatura": 0.0,  # Valor em graus Celsius
+    "movimento_detectado": False,
+    "gas_detectado": False
+}
+
+@app.route('/')
+def index():
+    """
+    Rota principal para mostrar o status atual do sistema.
+    """
+    return jsonify({
+        "mensagem": "Bem-vindo ao servidor de monitoramento do sistema de segurança!",
+        "sistema_seguranca": sistema_seguranca
+    })
+
+@app.route('/atualizar', methods=['POST'])
+def atualizar_status():
+    """
+    Rota para atualizar os dados enviados pelo dispositivo.
+    """
+    try:
+        # Obtém os dados enviados pelo dispositivo
+        data = request.json
+
+        # Atualiza os valores no dicionário do sistema de segurança
+        sistema_seguranca["ativado"] = data.get("ativado", sistema_seguranca["ativado"])
+        sistema_seguranca["estado_porta"] = data.get("estado_porta", sistema_seguranca["estado_porta"])
+        sistema_seguranca["umidade"] = data.get("umidade", sistema_seguranca["umidade"])
+        sistema_seguranca["temperatura"] = data.get("temperatura", sistema_seguranca["temperatura"])
+        sistema_seguranca["movimento_detectado"] = data.get("movimento_detectado", sistema_seguranca["movimento_detectado"])
+        sistema_seguranca["gas_detectado"] = data.get("gas_detectado", sistema_seguranca["gas_detectado"])
+
+        return jsonify({
+            "mensagem": "Status atualizado com sucesso.",
+            "sistema_seguranca": sistema_seguranca
+        }), 200
+    except Exception as e:
+        return jsonify({"erro": str(e)}), 400
+
+@app.route('/alertas')
+def alertas():
+    """
+    Rota para verificar se há alertas ativos no sistema.
+    """
+    alertas = []
+    if sistema_seguranca["gas_detectado"]:
+        alertas.append("ALERTA: Gás detectado!")
+    if sistema_seguranca["movimento_detectado"]:
+        alertas.append("ALERTA: Movimento detectado!")
+    if sistema_seguranca["ativado"] and sistema_seguranca["estado_porta"] == "Aberta":
+        alertas.append("ALERTA: Sistema ativado e porta aberta!")
+
+    return jsonify({
+        "alertas": alertas if alertas else "Nenhum alerta ativo.",
+        "sistema_seguranca": sistema_seguranca
+    })
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=True)
