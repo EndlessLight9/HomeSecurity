@@ -1,0 +1,135 @@
+from machine import I2C, Pin, PWM, ADC, time_pulse_us
+import time
+import neopixel
+
+# ------------------ Configuração do I2C (AHT10 - Temperatura e Umidade) ------------------
+i2c = I2C(0, scl=Pin(1), sda=Pin(0))
+AHT10_ADDRESS = 0x38  # Endereço I2C do sensor AHT10
+
+def aht10_init():
+    """Inicializa o sensor AHT10."""
+    i2c.writeto(AHT10_ADDRESS, bytearray([0xE1, 0x08, 0x00]))
+    time.sleep(0.05)
+
+def aht10_read():
+    """Lê a temperatura e a umidade do AHT10."""
+    i2c.writeto(AHT10_ADDRESS, bytearray([0xAC, 0x33, 0x00]))
+    time.sleep(0.05)
+    data = i2c.readfrom(AHT10_ADDRESS, 6)
+    humidity_raw = ((data[1] << 12) | (data[2] << 4) | (data[3] >> 4))
+    temperature_raw = (((data[3] & 0x0F) << 16) | (data[4] << 8) | data[5])
+    humidity = (humidity_raw * 100) / 1048576
+    temperature = ((temperature_raw * 200) / 1048576) - 50
+    return humidity, temperature
+
+# ------------------ Configuração do Servo e LEDs ------------------
+servo = PWM(Pin(17))  # GPIO17 para o servo
+servo.freq(50)  # Frequência de 50Hz
+botao_a = Pin(5, Pin.IN, Pin.PULL_UP)
+botao_b = Pin(6, Pin.IN, Pin.PULL_UP)
+NUM_LEDS = 25
+led_matrix = neopixel.NeoPixel(Pin(7), NUM_LEDS)
+
+posicao_atual = 0
+sistema_seguranca_ativado = False
+
+def set_servo_angle(angle):
+    """Define o ângulo do servo motor."""
+    duty = int((angle / 180) * 2000 + 500)
+    servo.duty_u16(int(duty * 65536 / 20000))
+
+def set_led_color(color):
+    """Define a cor dos LEDs."""
+    for i in range(NUM_LEDS):
+        adjusted_color = tuple(int(c * 0.05) for c in color)
+        led_matrix[i] = adjusted_color
+    led_matrix.write()
+
+# ------------------ Configuração do Ultrassom ------------------
+trigger_pin = Pin(9, Pin.OUT)
+echo_pin = Pin(16, Pin.IN)
+
+def medir_distancia():
+    """Mede a distância usando o sensor ultrassônico."""
+    trigger_pin.low()
+    time.sleep_us(2)
+    trigger_pin.high()
+    time.sleep_us(10)
+    trigger_pin.low()
+    duracao_pulso = time_pulse_us(echo_pin, 1, 30000)
+    if duracao_pulso < 0:
+        return None
+    distancia = (duracao_pulso / 2) / 29.1
+    return distancia
+
+def detectar_movimento(distancia_anterior, distancia_atual, limiar_variacao=5):
+    """Detecta movimento baseado em mudanças de distância."""
+    if abs(distancia_anterior - distancia_atual) > limiar_variacao:
+        return True
+    return False
+
+# ------------------ Configuração do Sensor de Gás ------------------
+sensor_gas = ADC(Pin(28))
+buzzer = Pin(21, Pin.OUT)
+LIMIAR_GAS = 40000
+
+def verificar_gas():
+    """Verifica o nível de gás."""
+    valor_gas = sensor_gas.read_u16()
+    print("Valor do sensor de gás:", valor_gas)
+    if valor_gas > LIMIAR_GAS:
+        print("Gás detectado!")
+        buzzer.on()
+    else:
+        buzzer.off()
+
+# ------------------ Loop Principal ------------------
+aht10_init()
+set_servo_angle(posicao_atual)
+set_led_color((255, 0, 0))  # LEDs vermelhos
+distancia_anterior = medir_distancia()
+
+while True:
+    try:
+        # Leitura do AHT10
+        humidity, temperature = aht10_read()
+        print("Umidade: {:.2f}%".format(humidity))
+        print("Temperatura: {:.2f}°C".format(temperature))
+    except OSError as e:
+        print("Erro no AHT10:", e)
+
+    # Sensor de gás
+    verificar_gas()
+
+    # Sensor ultrassônico
+    distancia_atual = medir_distancia()
+    if distancia_atual:
+        print("Distância: {:.2f} cm".format(distancia_atual))
+        if detectar_movimento(distancia_anterior, distancia_atual):
+            print("Movimento detectado!")
+        distancia_anterior = distancia_atual
+
+    # Controle do sistema de segurança
+    if not botao_b.value():
+        sistema_seguranca_ativado = not sistema_seguranca_ativado
+        if sistema_seguranca_ativado:
+            posicao_atual = 0
+            set_servo_angle(posicao_atual)
+            set_led_color((255, 0, 0))
+            print("Sistema ativado")
+        else:
+            print("Sistema desativado")
+        time.sleep(0.5)
+
+    if not botao_a.value():
+        if not sistema_seguranca_ativado:
+            posicao_atual = 90 if posicao_atual == 0 else 0
+            set_servo_angle(posicao_atual)
+            set_led_color((0, 255, 0) if posicao_atual == 90 else (255, 0, 0))
+            print(f"Servo movido para {posicao_atual} graus")
+        else:
+            print("Sistema ativado. Ação bloqueada.")
+        time.sleep(0.5)
+
+    time.sleep(1)
+
